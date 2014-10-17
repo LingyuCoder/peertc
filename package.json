@@ -1,16 +1,34 @@
 {
   "name": "peertc",
-  "version": "0.0.0",
-  "description": "",
+  "version": "0.0.1",
+  "description": "Client side of Peertc, use to send files and messages by webrtc datachannel",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/LingyuCoder/peertc.git"
+  },
+  "keywords": [
+    "webrtc",
+    "datachannel"
+  ],
+  "author": "skyinlayer",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/LingyuCoder/peertc/issues"
+  },
+  "homepage": "https://github.com/LingyuCoder/peertc",
+  "devDependencies": {
+    "gulp": "^3.8.8",
+    "gulp-concat": "^2.4.1",
+    "gulp-minify": "0.0.3",
+    "gulp-plumber": "^0.6.6",
+    "gulp-rename": "^1.2.0"
+  },
   "dependencies": {
     "express": "^4.9.7",
-    "lodash": "^2.4.1",
-    "ws": "^0.4.32"
+    "peertc": "0.0.1"
   }
 }

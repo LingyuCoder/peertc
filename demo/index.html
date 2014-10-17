@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Document</title>
+	<style>
+		.connect {
+			display: none;
+		}
+		.linked {
+			display: none;
+		}
+	</style>
+</head>
+<body>
+	<div class="login">
+		输入ID：<input id="idIpt" type="text"/>
+		<button id="loginBtn">注册</button>
+	</div>
+
+	<div class="connect">
+		<div class="link">
+			输入对方ID：<input id="toIpt" type="text"/>
+			<button id="connectBtn">连接</button>
+		</div>
+		<div class="linked">
+			<div>
+				发送消息：<input type="text" id="msgIpt">
+				<button id="msgBtn">发送</button>
+			</div>
+			<div>
+				发送文件：<input type="file" id="fileIpt">
+				<button id="fileBtn">发送</button>
+			</div>
+			
+			<ul id="messages"></ul>
+			<ul id="files"></ul>
+		</div>
+		
+		
+	</div>
+
+	<div class="connect"></div>
+	<script type="text/javascript" src="http://cdn.staticfile.org/jquery/2.1.1-rc2/jquery.min.js"></script>
+	<script type="text/javascript" src="peertc-min.js"></script>
+	<script type="text/javascript">
+		var peertc;
+		var $messages = $('#messages');
+		var $files = $('#files');
+		var connector;
+		$('#loginBtn').click(function() {
+			peertc = Peertc('ws://localhost:2999', $('#idIpt').val());
+
+			peertc.on('open', function(id) {
+				$('.linked').show();
+				$('.link').hide();
+				alert(id + '连接成功');
+				connector = peertc.connectors[id];
+			}).on('close', function(id) {
+				$('.linked').hide();
+				$('.link').show();
+				alert(id + '断开连接');
+			}).on('message', function(data, from) {
+				$messages.append('<li>' + from + ': ' + data + '</li>');
+			}).on('fileChunk', function(data, from) {
+				var $li = $('#file_' + data.id);
+				if ($li.length === 0) {
+					$files.append(($li = $('<li id="file_' + data.id + '"></li>')));
+				}
+				$li.text(data.meta.name + ': ' + (data.sended / data.sum * 100).toFixed(2) + '%');
+			}).on('file', function(meta) {
+				console.log(meta.name + ' downloaded');
+			})
+
+			$('.login').hide();
+			$('.connect').show();
+		});
+
+		$('#connectBtn').click(function() {
+			connector = peertc.connect($('#toIpt').val());
+		});
+
+		$('#msgBtn').click(function(){
+			connector.send($('#msgIpt').val());
+		});
+
+		$('#fileBtn').click(function(){
+			connector.sendFile($('#fileIpt').get()[0]);
+		});
+	</script>
+</body>
+</html>
