@@ -14,6 +14,12 @@
 	<script type="text/javascript">
 		var peertc = Peertc('ws://localhost:2999', 'user1').on('message', function(data, from) {
 			console.log(data, from);
+		}).on('open', function(id) {
+			alert(id + '连接成功');
+			console.log(peertc.connectors);
+		}).on('close', function(id) {
+			alert(id + '断开连接');
+			console.log(peertc.connectors);
 		});
 		var connector;
 		$('#link').click(function() {

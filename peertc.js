@@ -16,7 +16,6 @@ function Peertc() {
 		}));
 	});
 
-
 	that.on('__ice_candidate', function(data, socket) {
 		console.log(data.from + '---' + data.to + ': ice');
 		var soc = that.get(data.to);

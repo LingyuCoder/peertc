@@ -1,11 +1,29 @@
 var Peertc = (function() {
-	'use stricy';
+	'use strict';
 	var PeerConnection = (window.PeerConnection || window.webkitPeerConnection00 || window.webkitRTCPeerConnection || window.mozRTCPeerConnection);
-	var URL = (window.URL || window.webkitURL || window.msURL || window.oURL);
-	var getUserMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+	var URL = (window.URL || window.webkitURL || window.mozURL || window.msURL || window.oURL);
 	var nativeRTCIceCandidate = (window.mozRTCIceCandidate || window.RTCIceCandidate);
 	var nativeRTCSessionDescription = (window.mozRTCSessionDescription || window.RTCSessionDescription); // order is very important: "RTCSessionDescription" defined in Nighly but useless
-	var moz = !!navigator.mozGetUserMedia;
+	var moz = navigator.appCodeName === "Mozilla";
+
+	var DataChannelSupport = false;
+	var WebSocketSupport = !!WebSocket;
+	(function(){
+		try {
+			if(!PeerConnection) {
+				DataChannelSupport = false;
+			}
+			var pc = new webkitRTCPeerConnection(null);
+			if (pc && pc.createDataChannel) {
+				DataChannelSupport = true;
+			} else {
+				DataChannelSupport = false;
+			}
+		} catch (e) {
+			DataChannelSupport = false;
+		}
+	}());
+	
 	var noop = function() {};
 
 	var iceServer = {
@@ -15,10 +33,17 @@ var Peertc = (function() {
 	};
 	var packetSize = 1000;
 
-	var gid = 0;
+	function getRandomId() {
+		return (Math.random() * new Date().getTime()).toString(36).toUpperCase().replace(/\./g, '-');;
+	}
 
-	function getGid() {
-		return ++gid;
+	function dataURItoBlob(dataURI, dataTYPE) {
+		var binary = atob(dataURI.split(',')[1]),
+			array = [];
+		for (var i = 0; i < binary.length; i++) array.push(binary.charCodeAt(i));
+		return new Blob([new Uint8Array(array)], {
+			type: dataTYPE
+		});
 	}
 
 	function EventEmitter() {
@@ -58,9 +83,15 @@ var Peertc = (function() {
 	function FileSender(file) {
 		var that = this;
 		that.file = file;
+		that.meta = {
+			name: file.name,
+			size: file.size,
+			type: file.type
+		};
 		that.chunks = [];
 		that.sended = 0;
-		that.state = 'preparing';
+		that.id = getRandomId();
+		that.sum;
 	}
 
 	FileSender.prototype.chunkify = function(callback) {
@@ -71,6 +102,7 @@ var Peertc = (function() {
 		reader.onload = function(event, text) {
 			var data = event.target.result;
 			var chunks = that.chunks;
+			that.sum = data.length;
 			while (data.length) {
 				var chunk;
 				if (data.length > packetSize) {
@@ -80,18 +112,51 @@ var Peertc = (function() {
 				}
 				data = data.slice(chunk.length);
 			}
-			callback();
+			callback.call(that);
 		};
 	}
 
 	FileSender.prototype.getChunk = function() {
+		var chunk;
 		if (this.chunks.length) {
-			return this.chunks.shift();
+			var chunk = this.chunks.shift();
+			this.sended += chunk.length;
+			return chunk;
 		} else {
 			return null;
 		}
 	};
 
+
+	function FileReciever(id, meta, from) {
+		if (!(this instanceof FileReciever)) {
+			return new FileReciever(id, meta, from);
+		}
+		this.id = id;
+		this.chunks = [];
+		this.meta = meta;
+		this.sended = 0;
+	}
+
+	FileReciever.prototype.addChunk = function(chunk) {
+		this.chunks.push(chunk);
+		return this;
+	};
+
+	FileReciever.prototype.download = function() {
+		var that = this;
+		var data = that.chunks.join('');
+		var a = document.createElement("a");
+		document.body.appendChild(a);
+		a.style = "display: none";
+		var blob = dataURItoBlob(data, 'octet/stream');
+		var url = window.URL.createObjectURL(blob);
+		a.href = url;
+		a.download = that.meta.name;
+		a.click();
+		!moz && window.URL.revokeObjectURL(url);
+		a.parentNode.removeChild(a);
+	};
 
 	function Connector(config) {
 		if (!(this instanceof Connector)) {
@@ -105,23 +170,29 @@ var Peertc = (function() {
 		this.queue = [];
 		this.sending = false;
 		this.fileSenders = {};
+		this.fileRecievers = {};
 	}
 
 	Connector.prototype.__initDataChannel = function(channel) {
 		var that = this;
 		that.channel = channel;
+
+		channel.onopen = function() {
+			that.peertc.emit('open', that.to);
+		};
+
 		channel.onmessage = function(message) {
 			var json = JSON.parse(message.data);
-			json = JSON.parse(json);
 			if (json.type === 'message') {
 				that.__parseMessage(json.data, that.to);
 			} else if (json.type === 'file') {
-				that.__parseFileChunk(json.data);
+				that.__parseFileChunk(json.data, that.to);
 			}
 		};
 
 		channel.onclose = function(event) {
-			console.log('close');
+			that.close();
+			that.peertc.emit('close', that.to);
 		};
 
 		channel.onerror = function(err) {
@@ -132,6 +203,20 @@ var Peertc = (function() {
 	Connector.prototype.__parseMessage = function(data, from) {
 		this.peertc.emit('message', data, from);
 	};
+
+	Connector.prototype.__parseFileChunk = function(data, from) {
+		var that = this;
+		var fileRecievers = that.fileRecievers;
+		fileRecievers[from] = fileRecievers[from] || {};
+		var fileReciever = fileRecievers[from][data.id] = fileRecievers[from][data.id] || new FileReciever(data.id, data.meta, from);
+		fileReciever.addChunk(data.chunk);
+		that.peertc.emit('fileChunk', data, from);
+		if (data.sended === data.sum) {
+			fileReciever.download();
+			that.peertc.emit('file', fileReciever.meta, from);
+			delete fileRecievers[from][data.id];
+		}
+	}
 
 	Connector.prototype.__init = function(config) {
 		var that = this;
@@ -162,13 +247,11 @@ var Peertc = (function() {
 	};
 
 	Connector.prototype.sendFile = function(dom) {
-		var that = this,
-			file,
-			reader,
-			fileToSend,
-			sendId;
+		var that = this;
+		var file = file;
+		var reader = reader;
 		if (typeof dom === 'string') {
-			dom = document.getElementById(dom);
+			dom = document.querySelector(dom);
 		}
 		if (!dom.files || !dom.files[0]) {
 			throw Error('No file needs to be send');
@@ -180,16 +263,22 @@ var Peertc = (function() {
 			function send() {
 				var chunk = fileSender.getChunk();
 				if (chunk) {
-					that.queue.push(JSON.stringify({
-						type: 'message',
-						data: chunk
-					}));
-					if (!that.sending) {
-						setTimeout(function() {
-							that.__send();
-						}, 0);
-					}
+					that.queue.push({
+						type: 'file',
+						data: {
+							sum: fileSender.sum,
+							sended: fileSender.sended,
+							meta: fileSender.meta,
+							id: fileSender.id,
+							chunk: chunk
+						}
+					});
 					setTimeout(send, 0);
+				}
+				if (!that.sending) {
+					setTimeout(function() {
+						that.__send();
+					}, 0);
 				}
 			}
 			setTimeout(send, 0);
@@ -198,10 +287,10 @@ var Peertc = (function() {
 
 	Connector.prototype.send = function(data) {
 		var that = this;
-		that.queue.push(JSON.stringify({
+		that.queue.push({
 			type: 'message',
 			data: data
-		}));
+		});
 		if (!that.sending) {
 			setTimeout(function() {
 				that.__send();
@@ -219,33 +308,56 @@ var Peertc = (function() {
 		that.sending = true;
 		var data = queue[0];
 		var channel = that.channel;
-		if (channel.readyState.toLowerCase() === 'open') {
-			channel.send(JSON.stringify(data));
-			queue.shift();
-			that.sending = false;
-		} else if (channel.readyState.toLowerCase() === 'connecting') {
-			setTimeout(function() {
-				that.__send();
-			}, 0);
+		if (!channel) {
+			return;
+		} else {
+			var readyState = channel.readyState.toLowerCase();
+			if (readyState === 'open') {
+				data.from = that.id;
+				data.to = that.to;
+				channel.send(JSON.stringify(data));
+				queue.shift();
+				that.sending = false;
+			} else if (readyState === 'connecting') {
+				setTimeout(function() {
+					that.__send();
+				}, 0);
+			} else {
+				that.close();
+			}
 		}
 	};
 
 	Connector.prototype.close = function() {
+		var that = this;
 		that.sending = false;
 		that.queue = [];
-		that.pc.close();
+		if (that.channel && that.channel.readyState.toLowerCase() === 'connecting') {
+			that.channel.close();
+		}
+		that.channel = null;
+		if(that.pc.signalingState !== 'closed') {
+			that.pc.close();
+		}
+		delete that.peertc.connectors[that.to];
 	};
 
 	function Peertc(server, id) {
 		if (!(this instanceof Peertc)) {
 			return new Peertc(server, id);
 		}
+
+		if(!WebSocketSupport) {
+			this.emit('error', new Error('WebSocket is not supported, Please upgrade your browser!'));
+		}
+		if(!DataChannelSupport) {
+			this.emit('error', new Error('DataChannel is not supported, Please upgrade your browser!'));
+		}
+
 		this.id = id;
 		this.socket = new WebSocket(server);
 		this.connectors = {};
-		this.messageCb = noop;
 		this.__init();
-
 	}
 
 	Peertc.prototype = new EventEmitter();

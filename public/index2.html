@@ -6,15 +6,32 @@
 </head>
 <body>
 	<button id="btn">发送</button>
+	<ul id="files">
+	</ul>
 	<script type="text/javascript" src="http://cdn.staticfile.org/jquery/2.1.1-rc2/jquery.js"></script>
 	<script type="text/javascript" src="peertc.js"></script>
 	<script type="text/javascript">
-		var peertc = Peertc('ws://localhost:2999', 'user2').on('message', function(data, from){
+		var files = $('#files');
+		var peertc = Peertc('ws://localhost:2999', 'user2').on('message', function(data, from) {
 			console.log(data, from);
+		}).on('fileChunk', function(data, from) {
+			var li = $("#" + from);
+			if(li.length === 0) {
+				files.append((li = $('<li id="' + from + '"></li>')));
+			}
+			li.text(data.meta.name + ': ' + data.sended / data.sum * 100 + '%');
+		}).on('file', function() {
+			console.log('downloaded');
+		}).on('open', function(id) {
+			alert(id + '连接成功');
+			console.log(peertc.connectors);
+		}).on('close', function(id) {
+			alert(id + '断开连接');
+			console.log(peertc.connectors);
 		});
-		$('#btn').click(function(){
+		$('#btn').click(function() {
 			var p = peertc.connect('user1');
-			setInterval(function (){
+			setInterval(function() {
 				p.send('user2');
 			}, 1000);
 		});
