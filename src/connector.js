@@ -108,7 +108,7 @@ var Connector = (function() {
 			dom = document.querySelector(dom);
 		}
 		if (!dom.files || !dom.files[0]) {
-			throw Error('No file needs to be send');
+			that.peertc.emit('error', new Error('no file need to be send'), that.id);
 			return;
 		}
 		file = dom.files[0];
@@ -137,6 +137,7 @@ var Connector = (function() {
 			}
 			setTimeout(send, 0);
 		});
+		return that;
 	};
 
 	Connector.prototype.send = function(data) {

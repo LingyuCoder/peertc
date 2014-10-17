@@ -26,8 +26,5 @@ gulp.task('default', function() {
 gulp.task('watch', function() {
     gulp.watch([
         './src/*.js'
-    ], ['css']);
-    gulp.watch([
-        './src/**/*.*', '!./src/**/*.less'
-    ], ['copy']);
+    ], ['default']);
 });

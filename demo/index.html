@@ -70,7 +70,9 @@
 				$li.text(data.meta.name + ': ' + (data.sended / data.sum * 100).toFixed(2) + '%');
 			}).on('file', function(meta) {
 				console.log(meta.name + ' downloaded');
-			})
+			}).on('error', function(err){
+				alert(err.message);
+			});
 
 			$('.login').hide();
 			$('.connect').show();
