@@ -1,8 +1,6 @@
 var Peertc = (function() {
 	'use strict';
 	var PeerConnection = (window.PeerConnection || window.webkitPeerConnection00 || window.webkitRTCPeerConnection || window.mozRTCPeerConnection);
-	var nativeRTCIceCandidate = (window.mozRTCIceCandidate || window.RTCIceCandidate);
-	var nativeRTCSessionDescription = (window.mozRTCSessionDescription || window.RTCSessionDescription); // order is very important: "RTCSessionDescription" defined in Nighly but useless
 	var DataChannelSupport = false;
 	var WebSocketSupport = !!WebSocket;
 	var noop = function() {};
@@ -13,7 +11,7 @@ var Peertc = (function() {
 			if (!PeerConnection) {
 				DataChannelSupport = false;
 			}
-			pc = new webkitRTCPeerConnection(null);
+			pc = new PeerConnection(null);
 			if (pc && pc.createDataChannel) {
 				DataChannelSupport = true;
 			} else {
@@ -24,11 +22,7 @@ var Peertc = (function() {
 		}
 	}());
 
-	var iceServer = {
-		"iceServers": [{
-			"url": "stun:stun.l.google.com:19302"
-		}]
-	};
+	DataChannelSupport = false;
 
 	function Peertc(server, id) {
 		if (!(this instanceof Peertc)) {
@@ -37,9 +31,7 @@ var Peertc = (function() {
 
 		if (!WebSocketSupport) {
 			this.emit('error', new Error('WebSocket is not supported, Please upgrade your browser!'));
-		}
-		if (!DataChannelSupport) {
-			this.emit('error', new Error('DataChannel is not supported, Please upgrade your browser!'));
+			return;
 		}
 
 		this.id = id;
@@ -72,46 +64,26 @@ var Peertc = (function() {
 			}
 		};
 		socket.onerror = function(error) {
-			that.emit('error', error, socket);
+			that.emit('error', new Error('Socket error'));
 		};
 		socket.onclose = function() {
 			for (var i in connectors) {
-				connectors[i].pc && connectors[i].pc.close();
+				connectors[i].close();
 			}
 			connectors = {};
 		};
 		that.on('_init', function() {
 			that.emit('init');
 		});
-
 		that.on('_ice_candidate', function(data) {
-			var candidate = new nativeRTCIceCandidate(data);
-			var pc = connectors[data.from].pc;
-			pc.addIceCandidate(candidate);
+			connectors[data.from].__addCandidate(data);
 		});
 		that.on('_offer', function(data) {
 			var connector = that.__createConnector(data.from, false);
-			var sdp = data.sdp;
-			var pc = connector.pc;
-			pc.setRemoteDescription(new nativeRTCSessionDescription(sdp));
-			pc.createAnswer(function(session_desc) {
-				pc.setLocalDescription(session_desc);
-				that.socket.send(JSON.stringify({
-					"event": "__answer",
-					"data": {
-						"from": id,
-						"to": data.from,
-						"sdp": session_desc
-					}
-				}));
-			}, function(error) {
-				console.log(error);
-			});
+			connector.__sendAnswer(data);
 		});
-
 		that.on('_answer', function(data) {
-			var pc = connectors[data.from].pc;
-			pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
+			connectors[data.from].__recieveAnswer(data);
 		});
 	};
 
@@ -120,51 +92,25 @@ var Peertc = (function() {
 		var connector;
 		if (!that.connectors[to]) {
 			connector = that.__createConnector(to, true);
-			that.__sendOffer(to);
+			connector.__sendOffer();
 		} else {
 			connector = that.connectors[to];
 		}
 		return connector;
 	};
 
-	Peertc.prototype.__sendOffer = function(to) {
+	Peertc.prototype.__createConnector = function(to, isOpenner) {
 		var that = this;
-		var pc = that.connectors[to].pc;
-
-		function sendOffer() {
-			var readyState = that.socket.readyState;
-			if (readyState === 1) {
-				pc.createOffer(function(session_desc) {
-						pc.setLocalDescription(session_desc);
-						that.socket.send(JSON.stringify({
-							"event": "__offer",
-							"data": {
-								"sdp": session_desc,
-								"to": to,
-								"from": that.id
-							}
-						}));
-					},
-					function(error) {
-						console.log(error);
-					});
-			} else if (readyState === 0) {
-				setTimeout(sendOffer, 0);
-			}
-
-		}
-		setTimeout(sendOffer, 0);
-	};
-
-	Peertc.prototype.__createConnector = function(to, channel) {
-		var that = this;
-		var pc = new PeerConnection(iceServer);
-		return that.connectors[to] = new Connector({
-			pc: pc,
+		return that.connectors[to] = DataChannelSupport ? new Connector({
 			to: to,
 			id: that.id,
 			peertc: that,
-			channel: channel
+			isOpenner: isOpenner
+		}) : new SocketConnector({
+			to: to,
+			id: that.id,
+			peertc: that,
+			isOpenner: isOpenner
 		});
 	};
 

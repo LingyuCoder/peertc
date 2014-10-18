@@ -13,10 +13,10 @@ gulp.task('default', function() {
     return gulp.src(['./src/*.js'])
         .pipe(plumber(err))
         .pipe(concat('peertc.js'))
-        .pipe(minify({
+        /*.pipe(minify({
             exclude: ['build'],
             ignoreFiles: ['-min.js']
-        }))
+        }))*/
         .pipe(rename(function(path) {
             path.basename += '-min';
         }))

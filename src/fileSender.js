@@ -1,4 +1,5 @@
 var FileSender = (function() {
+	'use strict';
 	var packetSize = 1000;
 
 	function getRandomId() {

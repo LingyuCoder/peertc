@@ -1,1 +1,713 @@
-var Connector=function(){function e(n){return this instanceof e?(this.pc=n.pc,this.id=n.id,this.to=n.to,this.peertc=n.peertc,this.__init(n),this.queue=[],this.sending=!1,this.fileSenders={},void(this.fileRecievers={})):new e(n)}return e.prototype.__initDataChannel=function(e){var n=this;n.channel=e,e.onopen=function(){n.peertc.emit("open",n.to)},e.onmessage=function(e){var t=JSON.parse(e.data);"message"===t.type?n.__parseMessage(t.data,n.to):"file"===t.type&&n.__parseFileChunk(t.data,n.to)},e.onclose=function(){n.close(),n.peertc.emit("close",n.to)},e.onerror=function(e){n.peertc.emit("error",e,n.to)}},e.prototype.__parseMessage=function(e,n){this.peertc.emit("message",e,n)},e.prototype.__parseFileChunk=function(e,n){var t=this,o=t.fileRecievers;o[n]=o[n]||{};var i=o[n][e.id]=o[n][e.id]||new FileReciever(e.id,e.meta,n);i.addChunk(e.chunk),t.peertc.emit("fileChunk",e,n),e.sended===e.sum&&(i.download(),t.peertc.emit("file",i.meta,n),delete o[n][e.id])},e.prototype.__init=function(e){var n=this,t=n.pc,o=n.id,i=n.to;t.onicecandidate=function(e){e.candidate&&n.peertc.socket.send(JSON.stringify({event:"__ice_candidate",data:{label:e.candidate.sdpMLineIndex,candidate:e.candidate.candidate,from:o,to:i}}))},t.ondatachannel=function(e){n.__initDataChannel(e.channel)},e.channel&&n.__initDataChannel(t.createDataChannel(i))},e.prototype.sendFile=function(e){var n=this,t=t;if("string"==typeof e&&(e=document.querySelector(e)),!e.files||!e.files[0])return void n.peertc.emit("error",new Error("no file need to be send"),n.id);t=e.files[0];var o=new FileSender(t);return o.chunkify(function(){function e(){var t=o.getChunk();t&&(n.queue.push({type:"file",data:{sum:o.sum,sended:o.sended,meta:o.meta,id:o.id,chunk:t}}),setTimeout(e,0)),n.sending||setTimeout(function(){n.__send()},0)}setTimeout(e,0)}),n},e.prototype.send=function(e){var n=this;return n.queue.push({type:"message",data:e}),n.sending||setTimeout(function(){n.__send()},0),n},e.prototype.__send=function(){var e=this,n=e.queue;if(0!==n.length){e.sending=!0;var t=n[0],o=e.channel;if(o){var i=o.readyState.toLowerCase();"open"===i?(t.from=e.id,t.to=e.to,o.send(JSON.stringify(t)),n.shift(),e.sending=!1):"connecting"===i?setTimeout(function(){e.__send()},0):e.close()}}},e.prototype.close=function(){var e=this;e.sending=!1,e.queue=[],e.channel&&"connecting"===e.channel.readyState.toLowerCase()&&e.channel.close(),e.channel=null,"closed"!==e.pc.signalingState&&e.pc.close(),delete e.peertc.connectors[e.to]},e}(),EventEmitter=function(){function e(){this.events={}}return e.prototype.on=function(e,n){return this.events[e]=this.events[e]||[],this.events[e].push(n),this},e.prototype.emit=function(e){var n,t,o=this.events[e],i=Array.prototype.slice.call(arguments,1);if(o){for(n=0,t=o.length;t>n;n++)o[n].apply(null,i);return this}},e.prototype.off=function(e,n){var t,o=this.events[e];return o&&(t=-1!==o.indexOf(n))&&o.splice(t,1),this},e}(),FileReciever=function(){function e(e,n){for(var t=atob(e.split(",")[1]),o=[],i=0;i<t.length;i++)o.push(t.charCodeAt(i));return new Blob([new Uint8Array(o)],{type:n})}function n(e,t,o){return this instanceof n?(this.id=e,this.chunks=[],this.meta=t,void(this.sended=0)):new n(e,t,o)}var t=(window.URL||window.webkitURL||window.mozURL||window.msURL||window.oURL,"Mozilla"===navigator.appCodeName);return n.prototype.addChunk=function(e){return this.chunks.push(e),this},n.prototype.download=function(){var n=this,o=n.chunks.join(""),i=document.createElement("a");document.body.appendChild(i),i.style="display: none";var r=e(o,"octet/stream"),s=window.URL.createObjectURL(r);i.href=s,i.download=n.meta.name,i.click(),!t&&window.URL.revokeObjectURL(s),i.parentNode.removeChild(i)},n}(),FileSender=function(){function e(){return(Math.random()*(new Date).getTime()).toString(36).toUpperCase().replace(/\./g,"-")}function n(n){var t=this;t.file=n,t.meta={name:n.name,size:n.size,type:n.type},t.chunks=[],t.sended=0,t.id=e(),t.sum}var t=1e3;return n.prototype.chunkify=function(e){var n=this,o=n.file,i=new window.FileReader(o);i.readAsDataURL(o),i.onload=function(o){var i=o.target.result,r=n.chunks;for(n.sum=i.length;i.length;){var s;r.push(i.length>t?s=i.slice(0,t):s=i),i=i.slice(s.length)}e.call(n)}},n.prototype.getChunk=function(){var e;if(this.chunks.length){var e=this.chunks.shift();return this.sended+=e.length,e}return null},n}(),Peertc=function(){"use strict";function e(n,t){return this instanceof e?(r||this.emit("error",new Error("WebSocket is not supported, Please upgrade your browser!")),i||this.emit("error",new Error("DataChannel is not supported, Please upgrade your browser!")),this.id=t,this.socket=new WebSocket(n),this.connectors={},void this.__init()):new e(n,t)}var n=window.PeerConnection||window.webkitPeerConnection00||window.webkitRTCPeerConnection||window.mozRTCPeerConnection,t=window.mozRTCIceCandidate||window.RTCIceCandidate,o=window.mozRTCSessionDescription||window.RTCSessionDescription,i=!1,r=!!WebSocket;!function(){var e;try{n||(i=!1),e=new webkitRTCPeerConnection(null),i=e&&e.createDataChannel?!0:!1}catch(t){i=!1}}();var s={iceServers:[{url:"stun:stun.l.google.com:19302"}]};return e.prototype=new EventEmitter,e.prototype.__init=function(){var e=this,n=e.id,i=e.connectors,r=e.socket;r.onopen=function(){r.send(JSON.stringify({event:"__init",data:{id:n}}))},r.onmessage=function(n){var t=JSON.parse(n.data);t.event?e.emit(t.event,t.data,r):e.emit("message",t.data,r)},r.onerror=function(n){e.emit("error",n,r)},r.onclose=function(){for(var e in i)i[e].pc&&i[e].pc.close();i={}},e.on("_init",function(){e.emit("init")}),e.on("_ice_candidate",function(e){var n=new t(e),o=i[e.from].pc;o.addIceCandidate(n)}),e.on("_offer",function(t){var i=e.__createConnector(t.from,!1),r=t.sdp,s=i.pc;s.setRemoteDescription(new o(r)),s.createAnswer(function(o){s.setLocalDescription(o),e.socket.send(JSON.stringify({event:"__answer",data:{from:n,to:t.from,sdp:o}}))},function(e){console.log(e)})}),e.on("_answer",function(e){var n=i[e.from].pc;n.setRemoteDescription(new o(e.sdp))})},e.prototype.connect=function(e){var n,t=this;return t.connectors[e]?n=t.connectors[e]:(n=t.__createConnector(e,!0),t.__sendOffer(e)),n},e.prototype.__sendOffer=function(e){function n(){var i=t.socket.readyState;1===i?o.createOffer(function(n){o.setLocalDescription(n),t.socket.send(JSON.stringify({event:"__offer",data:{sdp:n,to:e,from:t.id}}))},function(e){console.log(e)}):0===i&&setTimeout(n,0)}var t=this,o=t.connectors[e].pc;setTimeout(n,0)},e.prototype.__createConnector=function(e,t){var o=this,i=new n(s);return o.connectors[e]=new Connector({pc:i,to:e,id:o.id,peertc:o,channel:t})},e}();
+var Connector = (function() {
+	'use strict';
+	var PeerConnection = (window.PeerConnection || window.webkitPeerConnection00 || window.webkitRTCPeerConnection || window.mozRTCPeerConnection);
+	var nativeRTCIceCandidate = (window.mozRTCIceCandidate || window.RTCIceCandidate);
+	var nativeRTCSessionDescription = (window.mozRTCSessionDescription || window.RTCSessionDescription); // order is very important: "RTCSessionDescription" defined in Nighly but useless
+	var iceServer = {
+		"iceServers": [{
+			"url": "stun:stun.l.google.com:19302"
+		}]
+	};
+
+	function Connector(config) {
+		if (!(this instanceof Connector)) {
+			return new Connector(config);
+		}
+		this.pc = new PeerConnection(iceServer);
+		this.id = config.id;
+		this.to = config.to;
+		this.peertc = config.peertc;
+		this.__init(config);
+		this.queue = [];
+		this.sending = false;
+		this.fileSenders = {};
+		this.fileRecievers = {};
+	}
+
+	Connector.prototype.__initDataChannel = function(channel) {
+		var that = this;
+		that.channel = channel;
+
+		channel.onopen = function() {
+			that.peertc.emit('open', that.to);
+		};
+
+		channel.onmessage = function(message) {
+			var json = JSON.parse(message.data);
+			if (json.type === 'message') {
+				that.__parseMessage(json.data);
+			} else if (json.type === 'file') {
+				that.__parseFileChunk(json.data);
+			}
+		};
+
+		channel.onclose = function(event) {
+			that.close();
+			that.peertc.emit('close', that.to);
+		};
+
+		channel.onerror = function(err) {
+			that.peertc.emit('error', err, that.to);
+		};
+	};
+
+	Connector.prototype.__parseMessage = function(data) {
+		var from = this.to;
+		this.peertc.emit('message', data, from);
+	};
+
+	Connector.prototype.__parseFileChunk = function(data) {
+		var that = this;
+		var from = that.to;
+		var fileRecievers = that.fileRecievers;
+		fileRecievers[from] = fileRecievers[from] || {};
+		var fileReciever = fileRecievers[from][data.id] = fileRecievers[from][data.id] || new FileReciever(data.id, data.meta, from);
+		fileReciever.addChunk(data.chunk);
+		that.peertc.emit('fileChunk', data, from);
+		if (data.sended === data.sum) {
+			fileReciever.download();
+			that.peertc.emit('file', fileReciever.meta, from);
+			delete fileRecievers[from][data.id];
+		}
+	}
+
+	Connector.prototype.__init = function(config) {
+		var that = this;
+		var pc = that.pc;
+		var id = that.id;
+		var to = that.to;
+
+		pc.onicecandidate = function(evt) {
+			if (evt.candidate) {
+				that.peertc.socket.send(JSON.stringify({
+					"event": "__ice_candidate",
+					"data": {
+						"label": evt.candidate.sdpMLineIndex,
+						"candidate": evt.candidate.candidate,
+						"from": id,
+						"to": to
+					}
+				}));
+			}
+		};
+
+		pc.ondatachannel = function(evt) {
+			that.__initDataChannel(evt.channel);
+		};
+		if (config.isOpenner) {
+			that.__initDataChannel(pc.createDataChannel(to));
+		}
+	};
+
+	Connector.prototype.sendFile = function(dom) {
+		var that = this;
+		var file = file;
+		var reader = reader;
+		if (typeof dom === 'string') {
+			dom = document.querySelector(dom);
+		}
+		if (!dom.files || !dom.files[0]) {
+			that.peertc.emit('error', new Error('no file need to be send'), that.id);
+			return;
+		}
+		file = dom.files[0];
+		var fileSender = new FileSender(file);
+		fileSender.chunkify(function() {
+			function send() {
+				var chunk = fileSender.getChunk();
+				if (chunk) {
+					that.queue.push({
+						type: 'file',
+						data: {
+							sum: fileSender.sum,
+							sended: fileSender.sended,
+							meta: fileSender.meta,
+							id: fileSender.id,
+							chunk: chunk
+						}
+					});
+					setTimeout(send, 0);
+				}
+				if (!that.sending) {
+					setTimeout(function() {
+						that.__send();
+					}, 0);
+				}
+			}
+			setTimeout(send, 0);
+		});
+		return that;
+	};
+
+	Connector.prototype.close = function() {
+		var that = this;
+		that.sending = false;
+		that.queue = [];
+		if (that.channel && that.channel.readyState.toLowerCase() === 'connecting') {
+			that.channel.close();
+		}
+		that.channel = null;
+		if (that.pc.signalingState !== 'closed') {
+			that.pc.close();
+		}
+		delete that.peertc.connectors[that.to];
+	};
+
+	Connector.prototype.send = function(data) {
+		var that = this;
+		that.queue.push({
+			type: 'message',
+			data: data
+		});
+		if (!that.sending) {
+			setTimeout(function() {
+				that.__send();
+			}, 0);
+		}
+		return that;
+	};
+
+	Connector.prototype.__send = function() {
+		var that = this;
+		var queue = that.queue;
+		if (queue.length === 0) {
+			return;
+		}
+		that.sending = true;
+		var data = queue[0];
+		var channel = that.channel;
+		if (!channel) {
+			return;
+		} else {
+			var readyState = channel.readyState.toLowerCase();
+			if (readyState === 'open') {
+				data.from = that.id;
+				data.to = that.to;
+				channel.send(JSON.stringify(data));
+				queue.shift();
+				that.sending = false;
+			} else if (readyState === 'connecting') {
+				setTimeout(function() {
+					that.__send();
+				}, 0);
+			} else {
+				that.close();
+			}
+		}
+	};
+
+	Connector.prototype.__addCandidate = function(data) {
+		this.pc && this.pc.addIceCandidate(new nativeRTCIceCandidate(data));
+	}
+
+	Connector.prototype.__sendOffer = function() {
+		var that = this;
+		var pc = that.pc;
+		var socket = that.peertc.socket;
+
+		function sendOffer() {
+			var readyState = socket.readyState;
+			if (readyState === 1) {
+				pc.createOffer(function(session_desc) {
+						pc.setLocalDescription(session_desc);
+						socket.send(JSON.stringify({
+							"event": "__offer",
+							"data": {
+								"sdp": session_desc,
+								"to": that.to,
+								"from": that.id
+							}
+						}));
+					},
+					function(error) {
+						that.peertc.emit('error', error);
+					});
+			} else if (readyState === 0) {
+				setTimeout(sendOffer, 0);
+			}
+
+		}
+		setTimeout(sendOffer, 0);
+	}
+
+	Connector.prototype.__sendAnswer = function(data) {
+		var sdp = data.sdp;
+		var that = this;
+		var pc = that.pc;
+		pc.setRemoteDescription(new nativeRTCSessionDescription(sdp));
+		pc.createAnswer(function(session_desc) {
+			pc.setLocalDescription(session_desc);
+			that.peertc.socket.send(JSON.stringify({
+				"event": "__answer",
+				"data": {
+					"from": that.id,
+					"to": that.to,
+					"sdp": session_desc
+				}
+			}));
+		}, function(error) {
+			that.peertc.emit('error', error);
+		});
+	}
+
+	Connector.prototype.__recieveAnswer = function(data) {
+		this.pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
+	}
+	return Connector;
+}());
+var EventEmitter = (function() {
+	'use strict';
+	function EventEmitter() {
+		this.events = {};
+	}
+	EventEmitter.prototype.on = function(eventName, callback) {
+		this.events[eventName] = this.events[eventName] || [];
+		this.events[eventName].push(callback);
+		return this;
+	};
+	EventEmitter.prototype.emit = function(eventName) {
+		var events = this.events[eventName],
+			args = Array.prototype.slice.call(arguments, 1),
+			i, m;
+
+		if (!events) {
+			return;
+		}
+		for (i = 0, m = events.length; i < m; i++) {
+			events[i].apply(null, args);
+		}
+		return this;
+	};
+	EventEmitter.prototype.off = function(eventName, callback) {
+		var callbacks = this.events[eventName];
+		var index;
+		if (callbacks && (index = callbacks.indexOf(callback) !== -1)) {
+			callbacks.splice(index, 1);
+		}
+		return this;
+	};
+	return EventEmitter;
+}());
+var FileReciever = (function() {
+	'use strict';
+	var URL = (window.URL || window.webkitURL || window.mozURL || window.msURL || window.oURL);
+	var moz = navigator.appCodeName === "Mozilla";
+
+	function dataURItoBlob(dataURI, dataTYPE) {
+		var binary = atob(dataURI.split(',')[1]),
+			array = [];
+		for (var i = 0; i < binary.length; i++) array.push(binary.charCodeAt(i));
+		return new Blob([new Uint8Array(array)], {
+			type: dataTYPE
+		});
+	}
+
+	function FileReciever(id, meta, from) {
+		if (!(this instanceof FileReciever)) {
+			return new FileReciever(id, meta, from);
+		}
+		this.id = id;
+		this.chunks = [];
+		this.meta = meta;
+		this.sended = 0;
+	}
+
+	FileReciever.prototype.addChunk = function(chunk) {
+		this.chunks.push(chunk);
+		return this;
+	};
+
+	FileReciever.prototype.download = function() {
+		var that = this;
+		var data = that.chunks.join('');
+		var a = document.createElement("a");
+		document.body.appendChild(a);
+		a.style = "display: none";
+		var blob = dataURItoBlob(data, 'octet/stream');
+		var url = window.URL.createObjectURL(blob);
+		a.href = url;
+		a.download = that.meta.name;
+		a.click();
+		!moz && window.URL.revokeObjectURL(url);
+		a.parentNode.removeChild(a);
+	};
+
+	return FileReciever;
+}());
+var FileSender = (function() {
+	'use strict';
+	var packetSize = 1000;
+
+	function getRandomId() {
+		return (Math.random() * new Date().getTime()).toString(36).toUpperCase().replace(/\./g, '-');;
+	}
+
+	function FileSender(file) {
+		var that = this;
+		that.file = file;
+		that.meta = {
+			name: file.name,
+			size: file.size,
+			type: file.type
+		};
+		that.chunks = [];
+		that.sended = 0;
+		that.id = getRandomId();
+		that.sum;
+	}
+
+	FileSender.prototype.chunkify = function(callback) {
+		var that = this;
+		var file = that.file;
+		var reader = new window.FileReader(file);
+		reader.readAsDataURL(file);
+		reader.onload = function(event, text) {
+			var data = event.target.result;
+			var chunks = that.chunks;
+			that.sum = data.length;
+			while (data.length) {
+				var chunk;
+				if (data.length > packetSize) {
+					chunks.push(chunk = data.slice(0, packetSize));
+				} else {
+					chunks.push(chunk = data);
+				}
+				data = data.slice(chunk.length);
+			}
+			callback.call(that);
+		};
+	}
+
+	FileSender.prototype.getChunk = function() {
+		var chunk;
+		if (this.chunks.length) {
+			var chunk = this.chunks.shift();
+			this.sended += chunk.length;
+			return chunk;
+		} else {
+			return null;
+		}
+	};
+
+	return FileSender;
+}());
+var Peertc = (function() {
+	'use strict';
+	var PeerConnection = (window.PeerConnection || window.webkitPeerConnection00 || window.webkitRTCPeerConnection || window.mozRTCPeerConnection);
+	var DataChannelSupport = false;
+	var WebSocketSupport = !!WebSocket;
+	var noop = function() {};
+
+	(function() {
+		var pc;
+		try {
+			if (!PeerConnection) {
+				DataChannelSupport = false;
+			}
+			pc = new PeerConnection(null);
+			if (pc && pc.createDataChannel) {
+				DataChannelSupport = true;
+			} else {
+				DataChannelSupport = false;
+			}
+		} catch (e) {
+			DataChannelSupport = false;
+		}
+	}());
+
+	DataChannelSupport = false;
+
+	function Peertc(server, id) {
+		if (!(this instanceof Peertc)) {
+			return new Peertc(server, id);
+		}
+
+		if (!WebSocketSupport) {
+			this.emit('error', new Error('WebSocket is not supported, Please upgrade your browser!'));
+			return;
+		}
+
+		this.id = id;
+		this.socket = new WebSocket(server);
+		this.connectors = {};
+		this.__init();
+	}
+
+	Peertc.prototype = new EventEmitter();
+
+	Peertc.prototype.__init = function() {
+		var that = this;
+		var id = that.id;
+		var connectors = that.connectors;
+		var socket = that.socket;
+		socket.onopen = function() {
+			socket.send(JSON.stringify({
+				'event': '__init',
+				'data': {
+					id: id
+				}
+			}));
+		};
+		socket.onmessage = function(message) {
+			var json = JSON.parse(message.data);
+			if (json.event) {
+				that.emit(json.event, json.data, socket);
+			} else {
+				that.emit('message', json.data, socket);
+			}
+		};
+		socket.onerror = function(error) {
+			that.emit('error', new Error('Socket error'));
+		};
+		socket.onclose = function() {
+			for (var i in connectors) {
+				connectors[i].close();
+			}
+			connectors = {};
+		};
+		that.on('_init', function() {
+			that.emit('init');
+		});
+		that.on('_ice_candidate', function(data) {
+			connectors[data.from].__addCandidate(data);
+		});
+		that.on('_offer', function(data) {
+			var connector = that.__createConnector(data.from, false);
+			connector.__sendAnswer(data);
+		});
+		that.on('_answer', function(data) {
+			connectors[data.from].__recieveAnswer(data);
+		});
+	};
+
+	Peertc.prototype.connect = function(to) {
+		var that = this;
+		var connector;
+		if (!that.connectors[to]) {
+			connector = that.__createConnector(to, true);
+			connector.__sendOffer();
+		} else {
+			connector = that.connectors[to];
+		}
+		return connector;
+	};
+
+	Peertc.prototype.__createConnector = function(to, isOpenner) {
+		var that = this;
+		return that.connectors[to] = DataChannelSupport ? new Connector({
+			to: to,
+			id: that.id,
+			peertc: that,
+			isOpenner: isOpenner
+		}) : new SocketConnector({
+			to: to,
+			id: that.id,
+			peertc: that,
+			isOpenner: isOpenner
+		});
+	};
+
+	return Peertc;
+}());
+var SocketConnector = (function() {
+	function recieveCb(connector) {
+		return function(message) {
+			var json = message;
+			if (json.type === 'message') {
+				connector.__parseMessage(json.data, connector.to);
+			} else if (json.type === 'file') {
+				connector.__parseFileChunk(json.data, connector.to);
+			}
+		};
+	}
+
+	function Connector(config) {
+		if (!(this instanceof Connector)) {
+			return new Connector(config);
+		}
+		this.id = config.id;
+		this.to = config.to;
+		this.peertc = config.peertc;
+		this.queue = [];
+		this.sending = false;
+		this.fileSenders = {};
+		this.fileRecievers = {};
+		this.channel = peertc.socket;
+		this.__init(config);
+	}
+
+	Connector.prototype.__init = function(config) {
+		var that = this;
+		that.recieveCb = recieveCb(that);
+		that.peertc.on('_socket', that.recieveCb);
+		if (!config.isOpenner) {
+			setTimeout(function(){
+				that.peertc.emit('open', that.to);
+			}, 0);
+		}
+	};
+
+	Connector.prototype.__parseMessage = function(data, from) {
+		this.peertc.emit('message', data, from);
+	};
+
+	Connector.prototype.__parseFileChunk = function(data, from) {
+		var that = this;
+		var fileRecievers = that.fileRecievers;
+		fileRecievers[from] = fileRecievers[from] || {};
+		var fileReciever = fileRecievers[from][data.id] = fileRecievers[from][data.id] || new FileReciever(data.id, data.meta, from);
+		fileReciever.addChunk(data.chunk);
+		that.peertc.emit('fileChunk', data, from);
+		if (data.sended === data.sum) {
+			fileReciever.download();
+			that.peertc.emit('file', fileReciever.meta, from);
+			delete fileRecievers[from][data.id];
+		}
+	}
+
+	Connector.prototype.sendFile = function(dom) {
+		var that = this;
+		var file = file;
+		var reader = reader;
+		if (typeof dom === 'string') {
+			dom = document.querySelector(dom);
+		}
+		if (!dom.files || !dom.files[0]) {
+			that.peertc.emit('error', new Error('no file need to be send'), that.id);
+			return;
+		}
+		file = dom.files[0];
+		var fileSender = new FileSender(file);
+		fileSender.chunkify(function() {
+			function send() {
+				var chunk = fileSender.getChunk();
+				if (chunk) {
+					that.queue.push({
+						type: 'file',
+						data: {
+							sum: fileSender.sum,
+							sended: fileSender.sended,
+							meta: fileSender.meta,
+							id: fileSender.id,
+							chunk: chunk
+						}
+					});
+					setTimeout(send, 0);
+				}
+				if (!that.sending) {
+					setTimeout(function() {
+						that.__send();
+					}, 0);
+				}
+			}
+			setTimeout(send, 0);
+		});
+		return that;
+	};
+
+	Connector.prototype.close = function() {
+		var that = this;
+		var to = that.to;
+		that.sending = false;
+		that.queue = [];
+		that.channel = null;
+		that.peertc.off(that.recieveCb);
+		delete that.peertc.connectors[to];
+		that.peertc.emit('close', to);
+	};
+
+	Connector.prototype.send = function(data) {
+		var that = this;
+		that.queue.push({
+			type: 'message',
+			data: data
+		});
+		if (!that.sending) {
+			setTimeout(function() {
+				that.__send();
+			}, 0);
+		}
+		return that;
+	};
+
+	Connector.prototype.__send = function() {
+		var that = this;
+		var queue = that.queue;
+		if (queue.length === 0) {
+			return;
+		}
+		that.sending = true;
+		var data = queue[0];
+		var channel = that.channel;
+		if (!channel) {
+			return;
+		} else {
+			var readyState = channel.readyState;
+			if (readyState === 1) {
+				data.from = that.id;
+				data.to = that.to;
+				channel.send(JSON.stringify({
+					event: '__socket',
+					data: data
+				}));
+				queue.shift();
+				that.sending = false;
+			} else if (readyState === 0) {
+				setTimeout(function() {
+					that.__send();
+				}, 0);
+			} else {
+				that.close();
+			}
+		}
+	};
+
+	Connector.prototype.__sendOffer = function() {
+		var that = this;
+		var pc = that.pc;
+		var socket = that.peertc.socket;
+
+		function sendOffer() {
+			var readyState = socket.readyState;
+			if (readyState === 1) {
+				socket.send(JSON.stringify({
+					"event": "__offer",
+					"data": {
+						"to": that.to,
+						"from": that.id
+					}
+				}));
+			} else if (readyState === 0) {
+				setTimeout(sendOffer, 0);
+			}
+		}
+		setTimeout(sendOffer, 0);
+	}
+
+	Connector.prototype.__sendAnswer = function() {
+		var that = this;
+		var pc = that.pc;
+		var socket = that.peertc.socket;
+
+		function sendAnswer() {
+			var readyState = socket.readyState;
+			if (readyState === 1) {
+				socket.send(JSON.stringify({
+					"event": "__answer",
+					"data": {
+						"to": that.to,
+						"from": that.id
+					}
+				}));
+			} else if (readyState === 0) {
+				setTimeout(sendAnswer, 0);
+			}
+		}
+		setTimeout(sendAnswer, 0);
+	}
+
+	Connector.prototype.__recieveAnswer = function() {
+		this.peertc.emit('open', this.to);
+	}
+	return Connector;
+}());

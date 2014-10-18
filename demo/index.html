@@ -50,7 +50,6 @@
 		var connector;
 		$('#loginBtn').click(function() {
 			peertc = Peertc('ws://localhost:2999', $('#idIpt').val());
-
 			peertc.on('open', function(id) {
 				$('.linked').show();
 				$('.link').hide();
@@ -71,7 +70,7 @@
 			}).on('file', function(meta) {
 				console.log(meta.name + ' downloaded');
 			}).on('error', function(err){
-				alert(err.message);
+				alert('发生错误');
 			});
 
 			$('.login').hide();

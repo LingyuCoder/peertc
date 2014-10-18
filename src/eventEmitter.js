@@ -1,4 +1,5 @@
 var EventEmitter = (function() {
+	'use strict';
 	function EventEmitter() {
 		this.events = {};
 	}

@@ -1,4 +1,5 @@
 var FileReciever = (function() {
+	'use strict';
 	var URL = (window.URL || window.webkitURL || window.mozURL || window.msURL || window.oURL);
 	var moz = navigator.appCodeName === "Mozilla";
 
