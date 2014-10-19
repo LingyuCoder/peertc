@@ -92,6 +92,9 @@ peertc.on('error', function(err){
 });
 ```
 
+##自动退化
+在支持WebRTC DataChannel的浏览器（chrome，firefox，opera）中，使用DataChannel，否则将退化使用websocket替代。
+
 ##依赖
 依赖peertc，已上传到npm上
 

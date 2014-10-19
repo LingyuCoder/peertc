@@ -1,4 +1,16 @@
-var Peertc = (function() {
+(function(factory) {
+	if (typeof define === 'function' && define.amd) {
+		define([], function() {
+			return factory();
+		});
+	} else if (typeof define === 'function' && define.cmd) {
+		define(function(require, exports, module) {
+			module.exports = factory();
+		});
+	} else {
+		window.Peertc = factory();
+	}
+}(function() {
 	'use strict';
 	var PeerConnection = (window.PeerConnection || window.webkitPeerConnection00 || window.webkitRTCPeerConnection || window.mozRTCPeerConnection);
 	var DataChannelSupport = false;
@@ -113,6 +125,5 @@ var Peertc = (function() {
 			isOpenner: isOpenner
 		});
 	};
-
 	return Peertc;
-}());
+}));
