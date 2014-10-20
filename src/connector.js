@@ -115,17 +115,22 @@ var Connector = (function() {
 		fileSender.chunkify(function() {
 			function send() {
 				var chunk = fileSender.getChunk();
+				var data = {
+					sum: fileSender.sum,
+					sended: fileSender.sended,
+					meta: fileSender.meta,
+					id: fileSender.id,
+					chunk: chunk
+				};
 				if (chunk) {
 					that.queue.push({
 						type: 'file',
-						data: {
-							sum: fileSender.sum,
-							sended: fileSender.sended,
-							meta: fileSender.meta,
-							id: fileSender.id,
-							chunk: chunk
-						}
+						data: data
 					});
+					that.peertc.emit("fileChunkSended", data, that.to);
+					if (data.sended === data.sum) {
+						that.peertc.emit("fileSended", data.meta, that.to);
+					}
 					setTimeout(send, 0);
 				}
 				if (!that.sending) {

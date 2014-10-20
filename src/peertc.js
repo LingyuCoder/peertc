@@ -34,8 +34,6 @@
 		}
 	}());
 
-	DataChannelSupport = false;
-
 	function Peertc(server, id) {
 		if (!(this instanceof Peertc)) {
 			return new Peertc(server, id);

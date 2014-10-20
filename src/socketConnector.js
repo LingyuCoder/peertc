@@ -21,7 +21,7 @@ var SocketConnector = (function() {
 		this.sending = false;
 		this.fileSenders = {};
 		this.fileRecievers = {};
-		this.channel = peertc.socket;
+		this.channel = config.peertc.socket;
 		this.__init(config);
 	}
 
@@ -30,7 +30,7 @@ var SocketConnector = (function() {
 		that.recieveCb = recieveCb(that);
 		that.peertc.on('_socket', that.recieveCb);
 		if (!config.isOpenner) {
-			setTimeout(function(){
+			setTimeout(function() {
 				that.peertc.emit('open', that.to);
 			}, 0);
 		}
@@ -70,17 +70,22 @@ var SocketConnector = (function() {
 		fileSender.chunkify(function() {
 			function send() {
 				var chunk = fileSender.getChunk();
+				var data = {
+					sum: fileSender.sum,
+					sended: fileSender.sended,
+					meta: fileSender.meta,
+					id: fileSender.id,
+					chunk: chunk
+				};
 				if (chunk) {
 					that.queue.push({
 						type: 'file',
-						data: {
-							sum: fileSender.sum,
-							sended: fileSender.sended,
-							meta: fileSender.meta,
-							id: fileSender.id,
-							chunk: chunk
-						}
+						data: data
 					});
+					that.peertc.emit("fileChunkSended", data, that.to);
+					if (data.sended === data.sum) {
+						that.peertc.emit("fileSended", data.meta, that.to);
+					}
 					setTimeout(send, 0);
 				}
 				if (!that.sending) {
