@@ -97,11 +97,11 @@
 		});
 	};
 
-	Peertc.prototype.connect = function(to) {
+	Peertc.prototype.connect = function(to, config) {
 		var that = this;
 		var connector;
 		if (!that.connectors[to]) {
-			connector = that.__createConnector(to, true);
+			connector = that.__createConnector(to, true, config);
 			connector.__sendOffer();
 		} else {
 			connector = that.connectors[to];
@@ -109,18 +109,20 @@
 		return connector;
 	};
 
-	Peertc.prototype.__createConnector = function(to, isOpenner) {
+	Peertc.prototype.__createConnector = function(to, isOpenner, config) {
 		var that = this;
 		return that.connectors[to] = DataChannelSupport ? new Connector({
 			to: to,
 			id: that.id,
 			peertc: that,
-			isOpenner: isOpenner
+			isOpenner: isOpenner,
+			opts: config
 		}) : new SocketConnector({
 			to: to,
 			id: that.id,
 			peertc: that,
-			isOpenner: isOpenner
+			isOpenner: isOpenner,
+			opts: config
 		});
 	};
 	return Peertc;

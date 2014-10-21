@@ -10,6 +10,9 @@
 		.linked {
 			display: none;
 		}
+		video {
+			width: 300px;
+		}
 	</style>
 </head>
 <body>
@@ -32,9 +35,12 @@
 				发送文件：<input type="file" id="fileIpt">
 				<button id="fileBtn">发送</button>
 			</div>
-			
+			<button id="videoBtn">视频</button>
+			<video id="videoOther"></video>
+			<video id="videoSelf"></video>
 			<ul id="messages"></ul>
 			<ul id="files"></ul>
+
 		</div>
 		
 		
@@ -47,6 +53,8 @@
 		var peertc;
 		var $messages = $('#messages');
 		var $files = $('#files');
+		var $videoSelf = $('#videoSelf');
+		var $videoOther = $('#videoOther');
 		var connector;
 		$('#loginBtn').click(function() {
 			peertc = Peertc('ws://localhost:2999', $('#idIpt').val());
@@ -69,8 +77,12 @@
 				$li.text(data.meta.name + ': ' + (data.sended / data.sum * 100).toFixed(2) + '%');
 			}).on('file', function(meta) {
 				console.log(meta.name + ' downloaded');
-			}).on('error', function(err){
-				alert('发生错误');
+			}).on('error', function(err) {
+				alert('发生错误:  ' + err.message);
+			}).on('stream', function(stream, from) {
+				stream.attachTo($videoOther.get()[0]);
+			}).on('localStream', function(stream, from){
+				stream.attachTo($videoSelf.get()[0]);
 			});
 
 			$('.login').hide();
@@ -81,12 +93,19 @@
 			connector = peertc.connect($('#toIpt').val());
 		});
 
-		$('#msgBtn').click(function(){
+		$('#msgBtn').click(function() {
 			connector.send($('#msgIpt').val());
 		});
 
-		$('#fileBtn').click(function(){
+		$('#fileBtn').click(function() {
 			connector.sendFile($('#fileIpt').get()[0]);
+		});
+
+		$('#videoBtn').click(function(){
+			connector.addStream({
+				video: true,
+				audio: false
+			});
 		});
 	</script>
 </body>

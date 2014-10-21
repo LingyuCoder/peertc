@@ -95,6 +95,34 @@ peertc.on('error', function(err){
 ##自动退化
 在支持WebRTC DataChannel的浏览器（chrome，firefox，opera）中，使用DataChannel，否则将退化使用websocket替代。
 
+##视频、音频聊天
+###发送
+通过如下`addStream`即可开启视频、音频聊天：
+
+```javascript
+connector.addStream({
+    video: true,//是否开启视频
+    audio: true//是否开启音频
+});
+```
+
+###监听视频到來
+通过如下方式来监听视频、音频流的到来：
+
+```javascript
+peertc.on('stream', function(stream, from){
+    //stream : 流对象，提供了一个attachTo方法用来绑定到一个video元素上
+    //from: 流的来源用户id
+    stream.attachTo(document.getElementById('otherVideo'));
+}).on('localStream', function(stream){
+    //stream：本地视频流对象，提供了一个attachTo方法用来绑定到一个video元素上
+    stream.attachTo(document.getElementById('selfVideo'));
+});
+```
+
+###兼容性
+若浏览器不兼容WebRTC Datachannel，数据将通过WebSocket传输，将无法开启视频、音频通信
+
 ##依赖
 依赖peertc，已上传到npm上
 

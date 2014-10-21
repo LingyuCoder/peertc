@@ -203,5 +203,9 @@ var SocketConnector = (function() {
 	Connector.prototype.__recieveAnswer = function() {
 		this.peertc.emit('open', this.to);
 	}
+
+	Connector.prototype.addStream = function() {
+		this.peertc.emit('error', new Error('Sorry, media stream can not be supported, please upgrade your browser.'));
+	};
 	return Connector;
 }());

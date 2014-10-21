@@ -3,11 +3,14 @@ var Connector = (function() {
 	var PeerConnection = (window.PeerConnection || window.webkitPeerConnection00 || window.webkitRTCPeerConnection || window.mozRTCPeerConnection);
 	var nativeRTCIceCandidate = (window.mozRTCIceCandidate || window.RTCIceCandidate);
 	var nativeRTCSessionDescription = (window.mozRTCSessionDescription || window.RTCSessionDescription); // order is very important: "RTCSessionDescription" defined in Nighly but useless
+	var getUserMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+	var URL = (window.URL || window.webkitURL || window.mozURL || window.msURL || window.oURL);
 	var iceServer = {
 		"iceServers": [{
 			"url": "stun:stun.l.google.com:19302"
 		}]
 	};
+	var localMediaStream;
 
 	function Connector(config) {
 		if (!(this instanceof Connector)) {
@@ -24,13 +27,23 @@ var Connector = (function() {
 		this.fileRecievers = {};
 	}
 
+	function attachStream(stream) {
+		return function(dom) {
+			if (typeof dom === 'string') {
+				dom = document.querySelector(dom);
+			}
+			if (navigator.mozGetUserMedia) {
+				dom.mozSrcObject = stream;
+			} else {
+				dom.src = URL.createObjectURL(stream);
+			}
+			dom.play();
+		};
+	}
+
 	Connector.prototype.__initDataChannel = function(channel) {
 		var that = this;
 		that.channel = channel;
-
-		channel.onopen = function() {
-			that.peertc.emit('open', that.to);
-		};
 
 		channel.onmessage = function(message) {
 			var json = JSON.parse(message.data);
@@ -38,17 +51,47 @@ var Connector = (function() {
 				that.__parseMessage(json.data);
 			} else if (json.type === 'file') {
 				that.__parseFileChunk(json.data);
+			} else if (json.type === 'offer') {
+				that.__parseOffer(json.data);
+			} else if (json.type === 'answer') {
+				that.__parseAnswer(json.data);
 			}
 		};
 
 		channel.onclose = function(event) {
-			that.close();
 			that.peertc.emit('close', that.to);
 		};
 
 		channel.onerror = function(err) {
 			that.peertc.emit('error', err, that.to);
 		};
+	};
+
+	Connector.prototype.__parseOffer = function(data) {
+		var that = this;
+		var pc = that.pc;
+
+		pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
+		that.__createLocalStream(data.options, function(stream) {
+			pc.addStream(stream);
+			pc.createAnswer(function(session_desc) {
+				pc.setLocalDescription(session_desc);
+				that.queue.push({
+					type: 'answer',
+					data: {
+						sdp: session_desc
+					}
+				});
+				that.__startSend();
+			}, function(error) {
+				that.peertc.emit('error', error);
+			});
+		});
+
+	};
+
+	Connector.prototype.__parseAnswer = function(data) {
+		this.pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
 	};
 
 	Connector.prototype.__parseMessage = function(data) {
@@ -82,8 +125,7 @@ var Connector = (function() {
 				that.peertc.socket.send(JSON.stringify({
 					"event": "__ice_candidate",
 					"data": {
-						"label": evt.candidate.sdpMLineIndex,
-						"candidate": evt.candidate.candidate,
+						"candidate": evt.candidate,
 						"from": id,
 						"to": to
 					}
@@ -93,9 +135,24 @@ var Connector = (function() {
 
 		pc.ondatachannel = function(evt) {
 			that.__initDataChannel(evt.channel);
+			that.peertc.emit('open', that.to);
 		};
+
+		pc.onaddstream = function(evt) {
+			var stream = evt.stream;
+			if (stream.label === 'default') {
+				return;
+			}
+			stream.attachTo = attachStream(stream);
+			that.peertc.emit('stream', stream, that.to);
+		};
+
 		if (config.isOpenner) {
-			that.__initDataChannel(pc.createDataChannel(to));
+			var channel = pc.createDataChannel(to);
+			channel.onopen = function() {
+				that.peertc.emit('open', that.to);
+			};
+			that.__initDataChannel(channel);
 		}
 	};
 
@@ -133,11 +190,7 @@ var Connector = (function() {
 					}
 					setTimeout(send, 0);
 				}
-				if (!that.sending) {
-					setTimeout(function() {
-						that.__send();
-					}, 0);
-				}
+				that.__startSend();
 			}
 			setTimeout(send, 0);
 		});
@@ -164,13 +217,18 @@ var Connector = (function() {
 			type: 'message',
 			data: data
 		});
+		that.__startSend();
+		return that;
+	};
+
+	Connector.prototype.__startSend = function() {
+		var that = this;
 		if (!that.sending) {
 			setTimeout(function() {
 				that.__send();
 			}, 0);
 		}
-		return that;
-	};
+	}
 
 	Connector.prototype.__send = function() {
 		var that = this;
@@ -202,7 +260,12 @@ var Connector = (function() {
 	};
 
 	Connector.prototype.__addCandidate = function(data) {
-		this.pc && this.pc.addIceCandidate(new nativeRTCIceCandidate(data));
+		var pc = this.pc;
+		try {
+			pc.addIceCandidate(new nativeRTCIceCandidate(data.candidate));
+		} catch (error) {
+
+		}
 	}
 
 	Connector.prototype.__sendOffer = function() {
@@ -258,5 +321,54 @@ var Connector = (function() {
 	Connector.prototype.__recieveAnswer = function(data) {
 		this.pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
 	}
+
+	Connector.prototype.addStream = function(opts) {
+
+		var that = this;
+		opts = opts || {};
+		var options = {
+			video: !!opts.video,
+			audio: !!opts.audio
+		};
+
+		that.__createLocalStream(options, function(stream) {
+			var pc = that.pc;
+			pc.addStream(stream);
+			pc.createOffer(function(session_desc) {
+					pc.setLocalDescription(session_desc);
+					that.queue.push({
+						"type": "offer",
+						"data": {
+							sdp: session_desc,
+							options: options
+						}
+					});
+					that.__startSend();
+				},
+				function(error) {
+					that.peertc.emit('error', error);
+				});
+		});
+		return that;
+	};
+
+	Connector.prototype.__createLocalStream = function(options, callback) {
+		var that = this;
+		if (!localMediaStream) {
+			getUserMedia.call(navigator, options, function(stream) {
+					localMediaStream = stream;
+					localMediaStream.attachTo = attachStream(localMediaStream);
+					that.peertc.emit('localStream', localMediaStream);
+					callback.call(that, localMediaStream);
+				},
+				function(error) {
+					that.peertc.emit("error", error);
+				});
+		} else {
+			setTimeout(function() {
+				callback.call(that, localMediaStream);
+			}, 0);
+		}
+	};
 	return Connector;
 }());
