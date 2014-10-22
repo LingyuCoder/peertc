@@ -36,6 +36,7 @@
 				<button id="fileBtn">发送</button>
 			</div>
 			<button id="videoBtn">视频</button>
+			<button id="videoStopBtn">中止</button>
 			<video id="videoOther"></video>
 			<video id="videoSelf"></video>
 			<ul id="messages"></ul>
@@ -57,7 +58,7 @@
 		var $videoOther = $('#videoOther');
 		var connector;
 		$('#loginBtn').click(function() {
-			peertc = Peertc('ws://localhost:2999', $('#idIpt').val());
+			peertc = Peertc('ws://10.210.3.169:2999', $('#idIpt').val());
 			peertc.on('open', function(id) {
 				$('.linked').show();
 				$('.link').hide();
@@ -81,8 +82,13 @@
 				alert('发生错误:  ' + err.message);
 			}).on('stream', function(stream, from) {
 				stream.attachTo($videoOther.get()[0]);
+				$videoSelf.get()[0].play();
 			}).on('localStream', function(stream, from){
 				stream.attachTo($videoSelf.get()[0]);
+			}).on('removeStream', function(from){
+				alert('视频聊天终止');
+				$videoOther.get()[0].pause();
+				$videoSelf.get()[0].pause();
 			});
 
 			$('.login').hide();
@@ -106,6 +112,10 @@
 				video: true,
 				audio: false
 			});
+		});
+
+		$('#videoStopBtn').click(function(){
+			connector.removeStream();
 		});
 	</script>
 </body>

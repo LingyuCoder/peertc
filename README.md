@@ -106,8 +106,17 @@ connector.addStream({
 });
 ```
 
-###监听视频到來
-通过如下方式来监听视频、音频流的到来：
+
+
+###中止视频
+通过removeStream方法能够停止视频聊天，并触发removeStream事件
+
+```javascript
+connector.removeStream();
+```
+
+###监听视频事件
+通过如下方式来监听视频、音频流的事件：
 
 ```javascript
 peertc.on('stream', function(stream, from){
@@ -117,8 +126,11 @@ peertc.on('stream', function(stream, from){
 }).on('localStream', function(stream){
     //stream：本地视频流对象，提供了一个attachTo方法用来绑定到一个video元素上
     stream.attachTo(document.getElementById('selfVideo'));
+}).on('removeStream', function(from){
+    //from: 关闭视频通信的用户id
 });
 ```
+
 
 ###兼容性
 若浏览器不兼容WebRTC Datachannel，数据将通过WebSocket传输，将无法开启视频、音频通信

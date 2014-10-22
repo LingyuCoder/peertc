@@ -25,6 +25,7 @@ var Connector = (function() {
 		this.sending = false;
 		this.fileSenders = {};
 		this.fileRecievers = {};
+		this.streaming = false;
 	}
 
 	function attachStream(stream) {
@@ -67,31 +68,73 @@ var Connector = (function() {
 		};
 	};
 
+	Connector.prototype.__recieveOfferFromDataChannel = function(data) {
+		var that = this;
+		var pc = that.pc;
+		pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
+	}
+
+	Connector.prototype.__revieveAnswerFromDataChannel = function(data) {
+		this.pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
+	};
+
+	Connector.prototype.__sendAnswerByDataChannel = function() {
+		var that = this;
+		var pc = that.pc;
+		pc.createAnswer(function(session_desc) {
+			pc.setLocalDescription(session_desc);
+			that.queue.push({
+				type: 'answer',
+				data: {
+					sdp: session_desc
+				}
+			});
+			that.__startSend();
+		}, function(error) {
+			that.peertc.emit('error', error);
+		});
+	};
+
+	Connector.prototype.__sendOfferByDataChannel = function(options) {
+		var that = this;
+		var pc = that.pc;
+		pc.createOffer(function(session_desc) {
+				pc.setLocalDescription(session_desc);
+				that.queue.push({
+					"type": "offer",
+					"data": {
+						sdp: session_desc,
+						options: options
+					}
+				});
+				that.__startSend();
+			},
+			function(error) {
+				that.peertc.emit('error', error);
+			});
+	};
+
 	Connector.prototype.__parseOffer = function(data) {
 		var that = this;
 		var pc = that.pc;
 
-		pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
-		that.__createLocalStream(data.options, function(stream) {
-			pc.addStream(stream);
-			pc.createAnswer(function(session_desc) {
-				pc.setLocalDescription(session_desc);
-				that.queue.push({
-					type: 'answer',
-					data: {
-						sdp: session_desc
-					}
-				});
-				that.__startSend();
-			}, function(error) {
-				that.peertc.emit('error', error);
+		that.__recieveOfferFromDataChannel(data);
+		if (data.options) {
+			that.__createLocalStream(data.options, function(stream) {
+				pc.addStream(stream);
+				that.streaming = true;
+				that.__sendAnswerByDataChannel();
 			});
-		});
-
+		} else {
+			pc.removeStream(localMediaStream);
+			that.streaming = false;
+			that.peertc.emit('removeStream', that.to);
+			that.__sendAnswerByDataChannel();
+		}
 	};
 
 	Connector.prototype.__parseAnswer = function(data) {
-		this.pc.setRemoteDescription(new nativeRTCSessionDescription(data.sdp));
+		this.__revieveAnswerFromDataChannel(data);
 	};
 
 	Connector.prototype.__parseMessage = function(data) {
@@ -146,6 +189,14 @@ var Connector = (function() {
 			stream.attachTo = attachStream(stream);
 			that.peertc.emit('stream', stream, that.to);
 		};
+
+		/*pc.onremovestream = function(evt) {
+			if (that.streaming) {
+				that.pc.removeStream(localMediaStream);
+				that.streaming = false;
+				that.peertc.emit('removeStream', that.to);
+			}
+		};*/
 
 		if (config.isOpenner) {
 			var channel = pc.createDataChannel(to);
@@ -334,22 +385,19 @@ var Connector = (function() {
 		that.__createLocalStream(options, function(stream) {
 			var pc = that.pc;
 			pc.addStream(stream);
-			pc.createOffer(function(session_desc) {
-					pc.setLocalDescription(session_desc);
-					that.queue.push({
-						"type": "offer",
-						"data": {
-							sdp: session_desc,
-							options: options
-						}
-					});
-					that.__startSend();
-				},
-				function(error) {
-					that.peertc.emit('error', error);
-				});
+			that.streaming = true;
+			that.__sendOfferByDataChannel(options);
 		});
 		return that;
+	};
+
+	Connector.prototype.removeStream = function() {
+		var that = this;
+		var pc = that.pc;
+		pc.removeStream(localMediaStream);
+		that.streaming = false;
+		that.peertc.emit('removeStream', that.to);
+		that.__sendOfferByDataChannel();
 	};
 
 	Connector.prototype.__createLocalStream = function(options, callback) {
