@@ -57,27 +57,29 @@
 		var $videoSelf = $('#videoSelf');
 		var $videoOther = $('#videoOther');
 		var connector;
+		var time = {};
 		$('#loginBtn').click(function() {
 			peertc = Peertc('ws://10.210.3.169:2999', $('#idIpt').val());
 			peertc.on('open', function(id) {
 				$('.linked').show();
 				$('.link').hide();
-				alert(id + '连接成功');
 				connector = peertc.connectors[id];
 			}).on('close', function(id) {
 				$('.linked').hide();
 				$('.link').show();
-				alert(id + '断开连接');
 			}).on('message', function(data, from) {
+				console.log(Date.now());
 				$messages.append('<li>' + from + ': ' + data + '</li>');
 			}).on('fileChunk', function(data, from) {
 				var $li = $('#file_' + data.id);
 				if ($li.length === 0) {
+					time[data.id] = Date.now();
 					$files.append(($li = $('<li id="file_' + data.id + '"></li>')));
 				}
 				$li.text(data.meta.name + ': ' + (data.sended / data.sum * 100).toFixed(2) + '%');
-			}).on('file', function(meta) {
-				console.log(meta.name + ' downloaded');
+			}).on('file', function(meta, from, id) {
+				console.log(id, time);
+				console.log(meta.name + ' downloaded, spent ' + (Date.now() - time[id]) + ' ms');
 			}).on('error', function(err) {
 				alert('发生错误:  ' + err.message);
 			}).on('stream', function(stream, from) {
@@ -101,6 +103,7 @@
 
 		$('#msgBtn').click(function() {
 			connector.send($('#msgIpt').val());
+			console.log(Date.now());
 		});
 
 		$('#fileBtn').click(function() {

@@ -1,6 +1,6 @@
 var FileSender = (function() {
 	'use strict';
-	var packetSize = 1000;
+	var packetSize = 111;
 
 	function getRandomId() {
 		return (Math.random() * new Date().getTime()).toString(36).toUpperCase().replace(/\./g, '-');;

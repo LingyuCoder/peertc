@@ -61,10 +61,12 @@ var Connector = (function() {
 
 		channel.onclose = function(event) {
 			that.peertc.emit('close', that.to);
+			delete that.peertc.connectors[that.to];
 		};
 
 		channel.onerror = function(err) {
 			that.peertc.emit('error', err, that.to);
+			delete that.peertc.connectors[that.to];
 		};
 	};
 
@@ -152,7 +154,7 @@ var Connector = (function() {
 		that.peertc.emit('fileChunk', data, from);
 		if (data.sended === data.sum) {
 			fileReciever.download();
-			that.peertc.emit('file', fileReciever.meta, from);
+			that.peertc.emit('file', fileReciever.meta, from, data.id);
 			delete fileRecievers[from][data.id];
 		}
 	}
@@ -355,6 +357,7 @@ var Connector = (function() {
 		var pc = that.pc;
 		pc.setRemoteDescription(new nativeRTCSessionDescription(sdp));
 		pc.createAnswer(function(session_desc) {
+			console.log(session_desc);
 			pc.setLocalDescription(session_desc);
 			that.peertc.socket.send(JSON.stringify({
 				"event": "__answer",
