@@ -82,6 +82,14 @@
 			}
 			connectors = {};
 		};
+		that.on('_ping', function() {
+			socket.send(JSON.stringify({
+				'event': '__pong',
+				'data': {
+					time: +new Date
+				}
+			}));
+		});
 		that.on('_init', function() {
 			that.emit('init');
 		});

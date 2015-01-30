@@ -330,6 +330,7 @@ var Connector = (function() {
 			var readyState = socket.readyState;
 			if (readyState === 1) {
 				pc.createOffer(function(session_desc) {
+						session_desc.sdp = session_desc.sdp.replace('AS:30', 'AS:1');
 						pc.setLocalDescription(session_desc);
 						socket.send(JSON.stringify({
 							"event": "__offer",
@@ -357,7 +358,7 @@ var Connector = (function() {
 		var pc = that.pc;
 		pc.setRemoteDescription(new nativeRTCSessionDescription(sdp));
 		pc.createAnswer(function(session_desc) {
-			console.log(session_desc);
+			session_desc.sdp = session_desc.sdp.replace('AS:30', 'AS:1');
 			pc.setLocalDescription(session_desc);
 			that.peertc.socket.send(JSON.stringify({
 				"event": "__answer",

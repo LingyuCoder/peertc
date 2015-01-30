@@ -2,11 +2,17 @@ var WebSocketServer = require('ws').Server;
 var events = require('events');
 var _ = require('lodash');
 var util = require('util');
+var PINGPONG = 25 * 1000;
 
 function Peertc() {
 	var that = this;
 	this.sockets = [];
 	this.mapping = {};
+
+	that.on('__pong', function(data, socket) {
+		socket.pingSent = 0;
+	});
+
 	that.on('__init', function(data, socket) {
 		var id = data.id;
 		socket.id = id;
@@ -17,7 +23,6 @@ function Peertc() {
 	});
 
 	that.on('__ice_candidate', function(data, socket) {
-		console.log(data.from + '---' + data.to + ': ice');
 		var soc = that.get(data.to);
 
 		if (soc) {
@@ -34,7 +39,6 @@ function Peertc() {
 	});
 
 	that.on('__offer', function(data, socket) {
-		console.log(data.from + '---' + data.to + ': offer');
 		var soc = that.get(data.to);
 		if (soc) {
 			soc.send(JSON.stringify({
@@ -49,7 +53,6 @@ function Peertc() {
 	});
 
 	that.on('__answer', function(data, socket) {
-		console.log(data.from + '---' + data.to + ': answer');
 		var soc = that.get(data.to);
 		if (soc) {
 			soc.send(JSON.stringify({
@@ -79,8 +82,22 @@ _.mixin(Peertc.prototype, {
 				that.emit("message", data, socket);
 			}
 		});
+		var pingpong = setInterval(function() {
+			if (socket.pingSent >= 2) {
+				socket.close();
+			} else {
+				socket.send(JSON.stringify({
+					"event": "_ping",
+					"data": {
+						time: +new Date
+					}
+				}));
+				socket.pingSent++;
+			}
+		}, PINGPONG);
 
 		socket.on('close', function() {
+			clearInterval(pingpong);
 			that.remove(socket);
 		});
 	},
