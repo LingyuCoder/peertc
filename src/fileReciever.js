@@ -32,7 +32,7 @@ var FileReciever = (function() {
 		var data = that.chunks.join('');
 		var a = document.createElement("a");
 		document.body.appendChild(a);
-		a.style = "display: none";
+		a.style.display = "none";
 		var blob = dataURItoBlob(data, 'octet/stream');
 		var url = window.URL.createObjectURL(blob);
 		a.href = url;
